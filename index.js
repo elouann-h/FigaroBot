@@ -31,4 +31,6 @@ if (process.env.REGISTER === "1") {
     })();
 }
 
+console.log("test")
+
 Susbot.login(process.env.TOKEN);
