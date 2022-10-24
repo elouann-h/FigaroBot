@@ -1,6 +1,6 @@
 module.exports = {
     classes: {
-        Questionnaire: require("./classes/Questionnaire"),
+        Quizz: require("./classes/Quizz"),
     },
     functions: {
         LoadCommands: require("./functions/LoadCommands"),

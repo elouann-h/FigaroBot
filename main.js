@@ -6,7 +6,7 @@ const index = require("./index");
 const client = new Client({ intents: 32771 });
 client.index = index;
 client.db = {
-    questionnaires: new Enmap({ name: "questionnaires" }),
+    quizz: new Enmap({ name: "questionnaires" }),
 };
 
 if (process.env.REGISTER === "1") void client.index.functions.LoadCommands(client);
