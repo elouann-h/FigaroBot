@@ -1,36 +1,10 @@
+const { Client } = require("discord.js");
 require("dotenv").config();
-const Discord = require("discord.js");
-const { REST, Routes } = require("discord.js");
+const LoadCommands = require("./functions/LoadCommands");
+const Commands = require("./json/Commands");
 
-const Susbot = new Discord.Client({ intents: 32771 });
+const susbot = new Client({ intents: 32771 });
 
-const commands = [
-    {
-        name: "questionnaire",
-        description: "Créer une partie de Vakarm...",
-    },
-    {
-        name: "roue-des-problemes",
-        description: "Créer une roue avec des défis, des questions et des dossiers...",
-    },
-];
+if (process.env.REGISTER === "1") void LoadCommands(susbot, Commands);
 
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-
-if (process.env.REGISTER === "1") {
-    (async () => {
-        try {
-            console.log("Started refreshing application (/) commands.");
-
-            await rest.put(Routes.applicationCommands("1033846760210169967"), { body: commands });
-
-            console.log("Successfully reloaded application (/) commands.");
-        } catch (error) {
-            console.error(error);
-        }
-    })();
-}
-
-console.log("test");
-
-Susbot.login(process.env.TOKEN);
+void susbot.login(process.env.TOKEN);
