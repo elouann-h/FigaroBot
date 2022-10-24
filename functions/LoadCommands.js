@@ -5,7 +5,7 @@ module.exports = async (client) => {
     try {
         console.log("Started refreshing application (/) commands.");
 
-        await rest.put(Routes.applicationCommands(client.user.id), { body: client.index.json.Commands });
+        await rest.put(Routes.applicationCommands(client.user.id), { body: client.index.enums.Commands });
 
         console.log("Successfully reloaded application (/) commands.");
     }

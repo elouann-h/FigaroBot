@@ -4,8 +4,10 @@ module.exports = {
     },
     functions: {
         LoadCommands: require("./functions/LoadCommands"),
+        NullFunction: require("./functions/NullFunction"),
     },
-    json: {
-        Commands: require("./json/Commands"),
+    enums: {
+        Commands: require("./enums/Commands"),
+        QuizzPhrases: require("./enums/QuizzPhrases"),
     },
 };
