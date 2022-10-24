@@ -10,52 +10,111 @@ const {
 const Enmap = require("enmap");
 
 class Quizz {
-    constructor(client, gameId, owner) {
-        this.finished = false;
-        this.historic = [];
+    constructor(client) {
         this.client = client;
-        this.gameId = gameId;
-        this.players = { [owner.id]: owner };
-        this.date = new Date();
-        this.owner = owner;
-        this.message = null;
-
-        this.save();
+        this.quizzDb = new Enmap({ name: "quizz" });
     }
 
-    async refresh(message = null) {
-        if (message !== null) this.message = message;
-        if (this.message === null) return;
-        await this.message.edit(this.messagePayload);
+    async refresh(quizzId) {
+        const message = this.getMessage(quizzId);
+        try {
+            if (message) message.edit(this.messagePayload(quizzId)).catch(this.client.functions.NullFunction);
+        }
+        catch {
+            this.client.channels.cache.get(this.quizzDb.get(quizzId).channel)
+                ?.send(this.messagePayload(quizzId))
+                ?.catch(this.client.functions.NullFunction);
+        }
         return this;
     }
 
-    get embed() {
+    gameExists(quizzId) {
+        return this.quizzDb.has(quizzId);
+    }
+
+    create(ownerData, quizzId) {
+        this.quizzDb.set(quizzId, {
+            quizzId,
+            date: new Date(),
+            owner: ownerData,
+            players: { [ownerData.id]: ownerData },
+            historic: [],
+            finished: false,
+            message: null,
+            channel: null,
+            guild: quizzId,
+        });
+        return quizzId;
+    }
+
+    /**
+     * Returns this data model:
+     * quizzIz, owner, players, historic, finished, message, channel, guild
+     */
+    get(quizzId) {
+        return this.quizzDb.get(quizzId);
+    }
+
+    setMessage(quizzId, message) {
+        this.quizzDb.set(
+            quizzId,
+            message.id, "message",
+        );
+        this.quizzDb.set(
+            quizzId,
+            message.channel.id,
+            "channel",
+        );
+        this.quizzDb.set(
+            quizzId,
+            message.guild.id,
+            "guild",
+        );
+        return this;
+    }
+
+    getMessage(quizzId) {
+        const data = this.quizzDb.get(quizzId);
+
+        const guild = this.client.guilds.cache.get(data.guild);
+        const channel = guild.channels.cache.get(data.channel);
+        try {
+            return channel.messages.fetch(data.message);
+        }
+        catch {
+            return null;
+        }
+    }
+
+    embed(quizzId) {
+        const data = this.quizzDb.get(quizzId);
         return new EmbedBuilder()
             .setColor(0xFFFFAA)
-            .setTitle(`Quizz - Partie du ${this.date.toLocaleString("fr-FR")}`)
-            .setDescription(`Owner de la partie: ${this.owner.name}`)
+            .setTitle(`Quizz - Partie du ${data.date.toLocaleString("fr-FR")}`)
+            .setDescription(`Owner de la partie: ${data.owner.name}`)
             .addFields(
                 {
                     name: "Joueurs",
-                    value: Object.values(this.players).map(player => player.name).join(", "),
+                    value: Object.values(data.players).map(player => player.nickname).join(", "),
                 },
             );
     }
 
-    get messagePayload() {
-        const embeds = [this.embed.toJSON()];
+    messagePayload(quizzId) {
+        const data = this.quizzDb.get(quizzId);
+
+        const embeds = [this.embed(quizzId).toJSON()];
         const components = [];
 
         const actualMomentEmbed = new EmbedBuilder()
             .setColor(0xFFFFAA);
 
-        if (this.finished) {
+        if (data.finished) {
             actualMomentEmbed.setTitle("Cette partie est terminée.");
         }
-        else if (this.historic.length === 0) {
+        else if (data.historic.length === 0) {
             actualMomentEmbed.setTitle("Cette partie n'a pas encore commencé.");
-            if (Object.keys(this.players).length < 3) actualMomentEmbed.setDescription("Il faut au moins 3 joueurs pour commencer une partie.");
+            if (Object.keys(data.players).length < 3) actualMomentEmbed.setDescription("Il faut au moins 3 joueurs pour commencer une partie.");
             components.push(
                 new ActionRowBuilder()
                     .setComponents(
@@ -63,13 +122,13 @@ class Quizz {
                             .setLabel("Commencer")
                             .setEmoji("✔️")
                             .setStyle(ButtonStyle.Primary)
-                            .setCustomId(`quizz_startGame_${this.gameId}`)
-                            .setDisabled(Object.keys(this.players).length < 3),
+                            .setCustomId(`quizz_startGame_${data.quizzId}`)
+                            .setDisabled(Object.keys(data.players).length < 3),
                         new ButtonBuilder()
                             .setLabel("Supprimer")
                             .setEmoji("🔚")
                             .setStyle(ButtonStyle.Danger)
-                            .setCustomId(`quizz_deleteGame_${this.gameId}`),
+                            .setCustomId(`quizz_deleteGame_${data.quizzId}`),
                     ),
                 new ActionRowBuilder()
                     .setComponents(
@@ -77,13 +136,13 @@ class Quizz {
                             .setLabel("Rejoindre")
                             .setEmoji("✖️")
                             .setStyle(ButtonStyle.Primary)
-                            .setCustomId(`quizz_joinGame_${this.gameId}`)
-                            .setDisabled(Object.keys(this.players).length >= 10),
+                            .setCustomId(`quizz_joinGame_${data.quizzId}`)
+                            .setDisabled(Object.keys(data.players).length >= 10),
                         new ButtonBuilder()
                             .setLabel("Quitter")
                             .setEmoji("➖")
                             .setStyle(ButtonStyle.Danger)
-                            .setCustomId(`quizz_leaveGame_${this.gameId}`),
+                            .setCustomId(`quizz_leaveGame_${data.quizzId}`),
                     ),
             );
         }
@@ -95,44 +154,23 @@ class Quizz {
         };
     }
 
-    save() {
-        const data = {};
-        for (const key in this) {
-            if (typeof this[key] !== "function") data[key] = this[key];
-        }
-        this.client.db.quizz.set(this.gameId, data);
+    addPlayer(quizzId, playerData) {
+        this.quizzDb.set(
+            quizzId,
+            { id: playerData.id, nickname: playerData.nickname },
+            `players.${playerData.id}`,
+        );
         return this;
     }
 
-    addPlayer(name, gender, userId) {
-        this.players[name] = {
-            name, gender, id: userId, timesPlayed: 0,
-        };
-        this.save();
+    removePlayer(quizzId, playerId) {
+        this.quizzDb.delete(quizzId, `players.${playerId}`);
         return this;
     }
 
-    removePlayer(name) {
-        delete this.players[name];
-        this.save();
+    delete(quizzId) {
+        this.quizzDb.delete(quizzId);
         return this;
-    }
-
-    generateQuestion() {
-        if (this.players.length < 3) return null;
-
-        const P1 = this.getRandomPlayer(Object.values(this.players));
-        const P2 = this.getRandomPlayer(Object.values(this.players).filter(player => player.name !== P1.name));
-
-        return (
-            Math.random <= 0.5 ?
-                this.client.enums.QuizzPhrases.getRandomSentence()
-                : this.client.enums.QuizzPhrases.getRandomVote()
-        ).replace("%P1", P1.name).replace("%P2", P2.name);
-    }
-
-    getRandomPlayer(list) {
-        return list[Math.floor(Math.random() * list.length)];
     }
 
     static async addPlayerModal(client, interaction, modalTitle) {
@@ -142,24 +180,17 @@ class Quizz {
             .setComponents(
                 new ActionRowBuilder().setComponents(
                     new TextInputBuilder()
-                        .setLabel("Entre ton nom")
+                        .setLabel("Entre ton surnom")
                         .setPlaceholder("Timeo le skatos...")
-                        .setCustomId("playerName")
+                        .setCustomId("playerNickname")
                         .setMinLength(4)
                         .setMaxLength(20)
                         .setRequired(true)
                         .setStyle(TextInputStyle.Short),
                 ),
-                new ActionRowBuilder().setComponents(
-                    new TextInputBuilder()
-                        .setLabel("Entre ton genre")
-                        .setPlaceholder("H/F/A (Homme, Femme, Autre)")
-                        .setCustomId("playerGender")
-                        .setMaxLength(1)
-                        .setRequired(true)
-                        .setStyle(TextInputStyle.Short),
-                ),
             );
+        console.log(interaction);
+        await interaction.deferUpdate();
         await interaction.showModal(modal).catch(client.functions.NullFunction);
         const modalSubmit = await interaction.awaitModalSubmit({
             filter: modalSubmitted => modalSubmitted.user.id === interaction.user.id,
@@ -169,27 +200,6 @@ class Quizz {
         modalSubmit?.deferUpdate().catch(client.functions.NullFunction);
 
         return modalSubmit;
-    }
-
-    static load(client, gameData) {
-        const gameId = gameData.gameId;
-        const owner = gameData.owner;
-        const game = new Quizz(client, gameId, owner);
-        game.finished = gameData.finished;
-        game.historic = gameData.historic;
-        game.players = gameData.players;
-        game.date = gameData.date;
-        game.owner = gameData.owner;
-        game.message = gameData.message;
-
-        game.save();
-        return game;
-    }
-
-    static getGame(client, gameId) {
-        const gameData = client.db.quizz.get(gameId);
-        if (gameData === "deleted" || gameData === undefined) return null;
-        return Quizz.load(client, gameData);
     }
 }
 

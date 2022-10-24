@@ -17,9 +17,7 @@ const client = new (class extends Client {
         super({ intents: 32771 });
         Object.assign(this, index);
 
-        this.db = {
-            quizz: new Enmap({ name: "quizz" }),
-        };
+        this.quizz = new this.classes.Quizz(this);
     }
 });
 
@@ -44,8 +42,6 @@ client.on("ready", () => {
 client.on("interactionCreate", async interaction => {
     if (interaction.isCommand()) {
         if (interaction.commandName === "questionnaire") {
-            const gameExists = client.classes.Quizz.getGame(client, interaction.guild.id) instanceof client.classes.Quizz;
-            let game = null;
             const message = await interaction.channel.send({
                 embeds: [
                     new EmbedBuilder()
@@ -55,38 +51,36 @@ client.on("interactionCreate", async interaction => {
                 ],
             });
 
-            if (!gameExists) {
-                const ownerData = { name: "TiméoSkatos", gender: "M", id: interaction.user.id };
+            if (!client.quizz.gameExists(interaction.guild.id)) {
+                const ownerData = { id: interaction.user.id, nickname: interaction.user.username };
                 const modalSubmit = await client.classes.Quizz.addPlayerModal(client, interaction, "Créer un Quizz !");
 
                 if (modalSubmit instanceof ModalSubmitInteraction) {
                     const modalFields = modalSubmit.fields.fields;
-                    ownerData["name"] = modalFields.get("playerName").value;
-                    ownerData["gender"] = modalFields.get("playerGender").value;
+                    ownerData["nickname"] = modalFields.get("playerNickname").value;
                 }
 
-                game = new client.classes.Quizz(client, interaction.guild.id, ownerData);
-            }
-            else {
-                game = client.classes.Quizz.getGame(client, interaction.guild.id);
+                client.quizz.create(ownerData, interaction.guild.id);
             }
 
-            await game.refresh(message);
+            client.quizz.setMessage(interaction.guild.id, message);
+            await client.quizz.refresh(interaction.guild.id);
         }
     }
     else if (interaction.isButton()) {
+        console.log(interaction.customId);
         if (interaction.customId.startsWith("quizz")) {
-            const [action, gameId] = interaction.customId.split("_").splice(1);
-            const game = client.classes.Quizz.getGame(client, gameId);
+            const [action, quizzId] = interaction.customId.split("_").splice(1);
+            if (!client.quizz.gameExists(quizzId)) return interaction.reply({ content: ":x: **La partie n'existe pas.**", ephemeral: true });
 
-            if (!(game instanceof client.classes.Quizz)) return interaction.reply({ content: ":x: **La partie n'existe pas.**", ephemeral: true });
+            const game = client.quizz.get(quizzId);
 
             if (action === "startGame") {
 
             }
             else if (action === "deleteGame") {
                 const owner = game.owner;
-                client.db.quizz.delete(gameId);
+                client.quizz.delete(quizzId);
                 await interaction.message.delete().catch(client.functions.NullFunction);
                 await interaction.channel.send(`:wave: **Le Quizz a été supprimé.** (${owner.name})`).catch(client.functions.NullFunction);
             }
@@ -95,32 +89,34 @@ client.on("interactionCreate", async interaction => {
                     await interaction.reply({
                         content: ":x: **Le Quizz est complet.** (10/10)",
                         ephemeral: true,
-                    });
+                    }).catch(client.functions.NullFunction);
                 }
                 else if (game.owner.id === interaction.user.id) {
                     await interaction.reply({
                         content: ":x: **Vous êtes le chef de cette partie.**",
                         ephemeral: true,
-                    });
+                    }).catch(client.functions.NullFunction);
                 }
                 else if (interaction.user.id in game.players) {
                     await interaction.reply({
                         content: ":x: **Vous êtes déjà dans cette partie.**",
                         ephemeral: true,
-                    });
+                    }).catch(client.functions.NullFunction);
                 }
                 else {
-                    const playerData = { name: "Maechien", gender: "M", id: interaction.user.id };
+                    const playerData = { id: interaction.user.id, nickname: interaction.user.username };
                     const modalSubmit = client.classes.Quizz.addPlayerModal(client, interaction, "Rejoindre le Quizz !");
 
                     if (modalSubmit instanceof ModalSubmitInteraction) {
                         const modalFields = modalSubmit.fields.fields;
-                        playerData["name"] = modalFields.get("playerName").value;
-                        playerData["gender"] = modalFields.get("playerGender").value;
+                        playerData["nickname"] = modalFields.get("playerNickname").value;
                     }
 
-                    game.addPlayer(playerData);
-                    await game.refresh();
+                    client.quizz.addPlayer(interaction.guild.id, playerData);
+                    await client.quizz.refresh(interaction.guild.id);
+                    await interaction.followUp({
+                        content: `:white_check_mark: **${playerData.nickname} (${interaction.user.username}) a rejoint la partie.**`,
+                    }).catch(client.functions.NullFunction);
                 }
             }
         }
