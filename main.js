@@ -90,11 +90,19 @@ client.on("interactionCreate", async interaction => {
             const game = client.quizz.get(quizzId);
 
             if (action === "generateQuestion") {
-                if (Math.random() < 0.7) {
-                    await client.quizz.generateQuestion(quizzId, interaction);
+                if (game.owner.id !== interaction.user.id) {
+                    interaction.reply({
+                        content: ":x: **Vous n'êtes pas le propriétaire de la partie.**",
+                        ephemeral: true,
+                    }).catch(client.functions.NullFunction);
                 }
                 else {
-                    await client.quizz.generateVote(quizzId, interaction);
+                    if (Math.random() < 0.7) {
+                        await client.quizz.generateQuestion(quizzId, interaction);
+                    }
+                    else {
+                        await client.quizz.generateVote(quizzId, interaction);
+                    }
                 }
             }
             else if (action === "startGame") {

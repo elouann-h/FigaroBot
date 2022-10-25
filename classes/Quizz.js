@@ -13,7 +13,7 @@ class Quizz {
     constructor(client) {
         this.client = client;
         this.quizzDb = new Enmap({ name: "quizz" });
-        this.playersMin = 2;
+        this.playersMin = 3;
     }
 
     async refresh(quizzId) {
