@@ -2,11 +2,6 @@ require("dotenv").config();
 const { Client,
     ActivityType,
     EmbedBuilder,
-    ActionRowBuilder,
-    ModalBuilder,
-    ButtonBuilder,
-    TextInputStyle,
-    TextInputBuilder,
     ModalSubmitInteraction,
 } = require("discord.js");
 const index = require("./index");
@@ -21,11 +16,10 @@ const client = new (class extends Client {
             simple: 0x303136,
             success: 0x43b581,
             error: 0xf04747,
+            question: 0x7289da,
         };
     }
 });
-
-if (process.env.REGISTER === "1") void client.index.functions.LoadCommands(client);
 
 client.on("ready", () => {
     console.log("Bot is ready!");
@@ -45,7 +39,7 @@ client.on("ready", () => {
 
 client.on("interactionCreate", async interaction => {
     if (interaction.isCommand()) {
-        if (interaction.commandName === "questionnaire") {
+        if (interaction.commandName === "quizz") {
             if (!client.quizz.gameExists(interaction.guild.id)) {
                 const message = await interaction.channel.send({
                     embeds: [
@@ -69,7 +63,7 @@ client.on("interactionCreate", async interaction => {
                 await client.quizz.refresh(interaction.guild.id);
             }
             else {
-               await interaction.reply({
+                await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                             .setDescription(`:mirror_ball: » **${interaction.user.username}**, récupération de la partie existante...`)
@@ -83,20 +77,53 @@ client.on("interactionCreate", async interaction => {
         }
     }
     else if (interaction.isButton()) {
-        if (interaction.customId.startsWith("quizz")) {
+        if (interaction.customId.startsWith("question")) {
+            try {
+                await interaction.message.delete().catch(client.functions.NullFunction);
+            }
+            catch (err) { return null; }
+        }
+        else if (interaction.customId.startsWith("quizz")) {
             const [action, quizzId] = interaction.customId.split("_").splice(1);
             if (!client.quizz.gameExists(quizzId)) return interaction.reply({ content: ":x: **La partie n'existe pas.**", ephemeral: true });
 
             const game = client.quizz.get(quizzId);
 
-            if (action === "startGame") {
-
+            if (action === "generateQuestion") {
+                if (Math.random() < 0.7) {
+                    await client.quizz.generateQuestion(quizzId, interaction);
+                }
+                else {
+                    await client.quizz.generateVote(quizzId, interaction);
+                }
+            }
+            else if (action === "startGame") {
+                if (game.owner.id !== interaction.user.id) {
+                    await interaction.reply({
+                        content: ":x: **Vous n'êtes pas le chef de la partie.**",
+                        ephemeral: true,
+                    });
+                }
+                else if (Object.keys(game.players).length < client.quizz.playersMin) {
+                    await interaction.reply({
+                        content: `:x: **Il faut au moins ${client.quizz.playersMin} joueurs pour commencer la partie.**`,
+                        ephemeral: true,
+                    });
+                }
+                else {
+                    await interaction.deferUpdate().catch(client.functions.NullFunction);
+                    client.quizz.start(interaction.guild.id);
+                    await interaction.channel.send({
+                        content: ":white_check_mark: **La partie a commencé !**",
+                    });
+                    await client.quizz.refresh(quizzId);
+                }
             }
             else if (action === "deleteGame") {
                 const owner = game.owner;
                 client.quizz.delete(quizzId);
                 await interaction.message.delete().catch(client.functions.NullFunction);
-                await interaction.channel.send(`:wave: **Le Quizz a été supprimé.** (${owner.name})`).catch(client.functions.NullFunction);
+                await interaction.channel.send(`:wave: **Le Quizz a été supprimé.** (${owner.nickname})`).catch(client.functions.NullFunction);
             }
             else if (action === "joinGame") {
                 if (game.players.length >= 10) {
@@ -135,7 +162,10 @@ client.on("interactionCreate", async interaction => {
             }
             else if (action === "leaveGame") {
                 if (interaction.user.id === game.owner.id) {
-
+                    await interaction.reply({
+                        content: ":x: **Vous êtes le chef de cette partie, vous ne pouvez que la supprimer.**",
+                        ephemeral: true,
+                    }).catch(client.functions.NullFunction);
                 }
                 else if (interaction.user.id in game.players) {
                     client.quizz.removePlayer(interaction.guild.id, interaction.user.id);
@@ -155,4 +185,6 @@ client.on("interactionCreate", async interaction => {
     }
 });
 
-void client.login(process.env.TOKEN);
+void client.login(process.env.TOKEN).then(async () => {
+    if (process.env.REGISTER === "1") void await client.functions.LoadCommands(client);
+});
