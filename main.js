@@ -9,15 +9,19 @@ const { Client,
     TextInputBuilder,
     ModalSubmitInteraction,
 } = require("discord.js");
-const Enmap = require("enmap");
 const index = require("./index");
 
 const client = new (class extends Client {
     constructor() {
-        super({ intents: 32771 });
+        super({ intents: 33539 });
         Object.assign(this, index);
 
         this.quizz = new this.classes.Quizz(this);
+        this.colors = {
+            simple: 0x303136,
+            success: 0x43b581,
+            error: 0xf04747,
+        };
     }
 });
 
@@ -42,16 +46,16 @@ client.on("ready", () => {
 client.on("interactionCreate", async interaction => {
     if (interaction.isCommand()) {
         if (interaction.commandName === "questionnaire") {
-            const message = await interaction.channel.send({
-                embeds: [
-                    new EmbedBuilder()
-                        .setTitle(`${interaction.user.username}, création de la partie...`)
-                        .setColor(0xFFFFAA)
-                        .toJSON(),
-                ],
-            });
-
             if (!client.quizz.gameExists(interaction.guild.id)) {
+                const message = await interaction.channel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setDescription(`:mirror_ball: » **${interaction.user.username}**, création de la partie...`)
+                            .setColor(client.colors.simple)
+                            .toJSON(),
+                    ],
+                });
+
                 const ownerData = { id: interaction.user.id, nickname: interaction.user.username };
                 const modalSubmit = await client.classes.Quizz.addPlayerModal(client, interaction, "Créer un Quizz !");
 
@@ -61,14 +65,24 @@ client.on("interactionCreate", async interaction => {
                 }
 
                 client.quizz.create(ownerData, interaction.guild.id);
+                client.quizz.setMessage(interaction.guild.id, message);
+                await client.quizz.refresh(interaction.guild.id);
             }
+            else {
+               await interaction.reply({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setDescription(`:mirror_ball: » **${interaction.user.username}**, récupération de la partie existante...`)
+                            .setColor(client.colors.simple)
+                            .toJSON(),
+                    ],
+                }).catch(client.functions.NullFunction);
 
-            client.quizz.setMessage(interaction.guild.id, message);
-            await client.quizz.refresh(interaction.guild.id);
+                await client.quizz.resend(interaction.guild.id, await interaction.fetchReply());
+            }
         }
     }
     else if (interaction.isButton()) {
-        console.log(interaction.customId);
         if (interaction.customId.startsWith("quizz")) {
             const [action, quizzId] = interaction.customId.split("_").splice(1);
             if (!client.quizz.gameExists(quizzId)) return interaction.reply({ content: ":x: **La partie n'existe pas.**", ephemeral: true });
@@ -105,7 +119,7 @@ client.on("interactionCreate", async interaction => {
                 }
                 else {
                     const playerData = { id: interaction.user.id, nickname: interaction.user.username };
-                    const modalSubmit = client.classes.Quizz.addPlayerModal(client, interaction, "Rejoindre le Quizz !");
+                    const modalSubmit = await client.classes.Quizz.addPlayerModal(client, interaction, "Rejoindre le Quizz !");
 
                     if (modalSubmit instanceof ModalSubmitInteraction) {
                         const modalFields = modalSubmit.fields.fields;
@@ -114,8 +128,26 @@ client.on("interactionCreate", async interaction => {
 
                     client.quizz.addPlayer(interaction.guild.id, playerData);
                     await client.quizz.refresh(interaction.guild.id);
-                    await interaction.followUp({
+                    await interaction.channel.send({
                         content: `:white_check_mark: **${playerData.nickname} (${interaction.user.username}) a rejoint la partie.**`,
+                    }).catch(client.functions.NullFunction);
+                }
+            }
+            else if (action === "leaveGame") {
+                if (interaction.user.id === game.owner.id) {
+
+                }
+                else if (interaction.user.id in game.players) {
+                    client.quizz.removePlayer(interaction.guild.id, interaction.user.id);
+                    await client.quizz.refresh(interaction.guild.id);
+                    await interaction.channel.send({
+                        content: `:white_check_mark: **${interaction.user.username} a quitté la partie.**`,
+                    }).catch(client.functions.NullFunction);
+                }
+                else {
+                    await interaction.reply({
+                        content: ":x: **Vous n'êtes pas dans cette partie.**",
+                        ephemeral: true,
                     }).catch(client.functions.NullFunction);
                 }
             }

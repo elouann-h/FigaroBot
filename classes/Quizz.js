@@ -16,7 +16,7 @@ class Quizz {
     }
 
     async refresh(quizzId) {
-        const message = this.getMessage(quizzId);
+        const message = await this.getMessage(quizzId);
         try {
             if (message) message.edit(this.messagePayload(quizzId)).catch(this.client.functions.NullFunction);
         }
@@ -25,6 +25,19 @@ class Quizz {
                 ?.send(this.messagePayload(quizzId))
                 ?.catch(this.client.functions.NullFunction);
         }
+        return this;
+    }
+
+    async resend(quizzId, newMsg) {
+        const message = await this.getMessage(quizzId);
+        try {
+            if (message) message.delete().catch(this.client.functions.NullFunction);
+        }
+        catch (err) { void err; }
+
+        await this.setMessage(quizzId, newMsg);
+        await this.refresh(quizzId);
+
         return this;
     }
 
@@ -86,18 +99,27 @@ class Quizz {
         }
     }
 
+    getPlayer(playerId) {
+        return this.client.users.cache.get(playerId)?.username ?? playerId;
+    }
+
     embed(quizzId) {
         const data = this.quizzDb.get(quizzId);
         return new EmbedBuilder()
-            .setColor(0xFFFFAA)
-            .setTitle(`Quizz - Partie du ${data.date.toLocaleString("fr-FR")}`)
-            .setDescription(`Owner de la partie: ${data.owner.name}`)
+            .setColor(this.client.colors.simple)
+            .setTitle("🍕 » Quizz !")
+            .setThumbnail("https://cdn.discordapp.com/attachments/1034027575917416448/1034389514128465960/question.png")
+            .setDescription("*Le but du jeu est de répondre à des questions qui seront posées. Certaines sont anonymes, d'autres non... :smirk:*")
             .addFields(
                 {
-                    name: "Joueurs",
-                    value: Object.values(data.players).map(player => player.nickname).join(", "),
+                    name: `\u200b\n> Liste des joueurs (**${Object.keys(data.players).length}**/10)`,
+                    value: "\u200b\n" + Object.values(data.players).map(player =>
+                        `**${player.nickname}** (${this.getPlayer(player.id)})`,
+                    ).join("\n"),
                 },
-            );
+            )
+            .setFooter({ text: `ID: ${data.quizzId}` })
+            .setTimestamp(data.date);
     }
 
     messagePayload(quizzId) {
@@ -106,15 +128,19 @@ class Quizz {
         const embeds = [this.embed(quizzId).toJSON()];
         const components = [];
 
-        const actualMomentEmbed = new EmbedBuilder()
-            .setColor(0xFFFFAA);
+        const actualMomentEmbed = new EmbedBuilder();
 
         if (data.finished) {
-            actualMomentEmbed.setTitle("Cette partie est terminée.");
+            actualMomentEmbed
+                .setColor(this.client.colors.success)
+                .setTitle("✅ » Cette partie est terminée.");
         }
         else if (data.historic.length === 0) {
-            actualMomentEmbed.setTitle("Cette partie n'a pas encore commencé.");
-            if (Object.keys(data.players).length < 3) actualMomentEmbed.setDescription("Il faut au moins 3 joueurs pour commencer une partie.");
+            actualMomentEmbed
+                .setColor(this.client.colors.error)
+                .setTitle("**⏳ » Cette partie n'a pas encore démarré.**");
+            if (Object.keys(data.players).length < 3) actualMomentEmbed.setDescription("> Il faut au moins 3 joueurs pour commencer une partie.");
+            else actualMomentEmbed.setDescription("> En attente du chef de partie pour démarrer la partie...");
             components.push(
                 new ActionRowBuilder()
                     .setComponents(
@@ -189,8 +215,6 @@ class Quizz {
                         .setStyle(TextInputStyle.Short),
                 ),
             );
-        console.log(interaction);
-        await interaction.deferUpdate();
         await interaction.showModal(modal).catch(client.functions.NullFunction);
         const modalSubmit = await interaction.awaitModalSubmit({
             filter: modalSubmitted => modalSubmitted.user.id === interaction.user.id,
