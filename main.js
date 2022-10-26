@@ -96,13 +96,11 @@ client.on("interactionCreate", async interaction => {
                         ephemeral: true,
                     }).catch(client.functions.NullFunction);
                 }
+                else if (Math.random() < 0.7) {
+                    await client.quizz.generateQuestion(quizzId, interaction);
+                }
                 else {
-                    if (Math.random() < 0.7) {
-                        await client.quizz.generateQuestion(quizzId, interaction);
-                    }
-                    else {
-                        await client.quizz.generateVote(quizzId, interaction);
-                    }
+                    await client.quizz.generateVote(quizzId, interaction);
                 }
             }
             else if (action === "startGame") {
