@@ -13,7 +13,7 @@ class Quizz {
     constructor(client) {
         this.client = client;
         this.quizzDb = new Enmap({ name: "quizz" });
-        this.playersMin = 3;
+        this.playersMin = 2;
     }
 
     async refresh(quizzId) {
@@ -156,7 +156,7 @@ class Quizz {
             actualMomentEmbed
                 .setColor(this.client.colors.error)
                 .setTitle("**⏳ » Cette partie n'a pas encore démarré.**");
-            if (Object.keys(data.players).length < this.playersMin) actualMomentEmbed.setDescription("> Il faut au moins this.playersMin joueurs pour commencer une partie.");
+            if (Object.keys(data.players).length < this.playersMin) actualMomentEmbed.setDescription(`> Il faut au moins ${this.playersMin} joueurs pour commencer une partie.`);
             else actualMomentEmbed.setDescription("> En attente du chef de partie pour démarrer la partie...");
             components.push(
                 new ActionRowBuilder()
