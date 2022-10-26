@@ -1,7 +1,7 @@
 const { Routes, REST } = require("discord.js");
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 module.exports = async (client) => {
+    const rest = new REST({ version: "10" }).setToken(client.token);
     try {
         console.log("Started refreshing application (/) commands.");
 

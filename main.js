@@ -11,6 +11,8 @@ const client = new (class extends Client {
         super({ intents: 33539 });
         Object.assign(this, index);
 
+        this.token = require("./token.json").token;
+
         this.quizz = new this.classes.Quizz(this);
         this.colors = {
             simple: 0x303136,
@@ -26,8 +28,7 @@ client.on("ready", () => {
     let statusIndex = 0;
     setInterval(() => {
         const activities = [
-            { name: "Maelys a un plus gros zizi que Noe", type: ActivityType.Playing },
-            { name: "Je suis un skatos gay tah Timeo", type: ActivityType.Playing },
+            { name: "Coucou", type: ActivityType.Playing },
         ];
         client.user.setPresence({
             activities: [activities[statusIndex]],
@@ -38,41 +39,66 @@ client.on("ready", () => {
 });
 
 client.on("interactionCreate", async interaction => {
+    if (process.env.TEST_MODE === "1" && interaction.user.id !== "539842701592494111") return;
     if (interaction.isCommand()) {
         if (interaction.commandName === "quizz") {
-            if (!client.quizz.gameExists(interaction.guild.id)) {
-                const message = await interaction.channel.send({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setDescription(`:mirror_ball: » **${interaction.user.username}**, création de la partie...`)
-                            .setColor(client.colors.simple)
-                            .toJSON(),
-                    ],
-                });
+            if (interaction.member.roles.cache.find(r => r.name.includes("QuizzMan"))) {
+                if (!client.quizz.gameExists(interaction.guild.id)) {
+                    const message = await interaction.channel.send({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setDescription(`:mirror_ball: » **${interaction.user.username}**, création de la partie...`)
+                                .setColor(client.colors.simple)
+                                .toJSON(),
+                        ],
+                    });
 
-                const ownerData = { id: interaction.user.id, nickname: interaction.user.username };
-                const modalSubmit = await client.classes.Quizz.addPlayerModal(client, interaction, "Créer un Quizz !");
+                    const ownerData = { id: interaction.user.id, nickname: interaction.user.username };
+                    const modalSubmit = await client.classes.Quizz.addPlayerModal(client, interaction, "Créer un Quizz !");
 
-                if (modalSubmit instanceof ModalSubmitInteraction) {
-                    const modalFields = modalSubmit.fields.fields;
-                    ownerData["nickname"] = modalFields.get("playerNickname").value;
+                    if (modalSubmit instanceof ModalSubmitInteraction) {
+                        const modalFields = modalSubmit.fields.fields;
+                        ownerData["nickname"] = modalFields.get("playerNickname").value;
+                    }
+
+                    client.quizz.create(ownerData, interaction.guild.id);
+                    client.quizz.setMessage(interaction.guild.id, message);
+                    await client.quizz.refresh(interaction.guild.id);
                 }
+                else {
+                    await interaction.reply({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setDescription(`:mirror_ball: » **${interaction.user.username}**, récupération de la partie existante...`)
+                                .setColor(client.colors.simple)
+                                .toJSON(),
+                        ],
+                    }).catch(client.functions.NullFunction);
 
-                client.quizz.create(ownerData, interaction.guild.id);
-                client.quizz.setMessage(interaction.guild.id, message);
-                await client.quizz.refresh(interaction.guild.id);
+                    await client.quizz.resend(interaction.guild.id, await interaction.fetchReply());
+                }
             }
             else {
                 await interaction.reply({
                     embeds: [
                         new EmbedBuilder()
-                            .setDescription(`:mirror_ball: » **${interaction.user.username}**, récupération de la partie existante...`)
-                            .setColor(client.colors.simple)
+                            .setDescription(`:mirror_ball: » **${interaction.user.username}**, pour lancer une partie, vous devez avoir un rôle nommé **\`QuizzMan\`** !`)
+                            .setColor(client.colors.error)
                             .toJSON(),
                     ],
                 }).catch(client.functions.NullFunction);
-
-                await client.quizz.resend(interaction.guild.id, await interaction.fetchReply());
+            }
+        }
+        else if (interaction.commandName === "delete-guild-quizz") {
+            if (interaction.member.permissions.has("Administrator")) {
+                if (client.quizz.gameExists(interaction.guild.id)) {
+                    client.quizz.delete(interaction.guild.id);
+                    await client.quizz.getMessage(interaction.guild.id).delete().catch(client.functions.NullFunction);
+                    await interaction.channel.send(":wave: **Le Quizz a été supprimé par un administrateur.**").catch(client.functions.NullFunction);
+                }
+                else {
+                    await interaction.reply(":x: **Il n'y a aucun Quizz sur ce serveur.**").catch(client.functions.NullFunction);
+                }
             }
         }
     }
@@ -191,6 +217,6 @@ client.on("interactionCreate", async interaction => {
     }
 });
 
-void client.login(process.env.TOKEN).then(async () => {
+void client.login(client.token).then(async () => {
     if (process.env.REGISTER === "1") void await client.functions.LoadCommands(client);
 });
